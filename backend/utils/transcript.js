@@ -9,9 +9,11 @@ export async function getTranscript(videoId) {
     const transcripts = await YoutubeTranscript.fetchTranscript(videoId);
     
     if (transcripts && transcripts.length > 0) {
+      // Preserve segment boundaries as newlines to keep transcript structure
       const transcript = transcripts
-        .map(item => item.text)
-        .join(' ');
+        .map(item => item.text.trim())
+        .filter(Boolean)
+        .join('\n');
       
       if (transcript.trim()) {
         console.log(`Successfully extracted ${transcript.length} characters from transcript`);
@@ -36,7 +38,8 @@ export async function getTranscript(videoId) {
 async function tryAlternativeMethods(videoId) {
   try {
     // Try with different language codes
-    const languages = ['en', 'en-US', 'en-GB', 'en-CA'];
+    // Try common caption language codes including auto-generated variants
+    const languages = ['en', 'en-US', 'en-GB', 'en-CA', 'a.en', 'auto'];
     
     for (const lang of languages) {
       try {
@@ -51,9 +54,9 @@ async function tryAlternativeMethods(videoId) {
           }
         );
         
-        if (response.data && response.data.length > 100) {
+        if (response.data && response.data.length > 50) {
           const parsed = parseTranscript(response.data);
-          if (parsed && parsed.length > 50) {
+          if (parsed && parsed.length > 20) {
             console.log(`Found transcript in ${lang}: ${parsed.length} characters`);
             return parsed;
           }
@@ -77,9 +80,9 @@ async function tryAlternativeMethods(videoId) {
         }
       );
       
-      if (response.data && response.data.length > 100) {
+      if (response.data && response.data.length > 50) {
         const parsed = parseTranscript(response.data);
-        if (parsed && parsed.length > 50) {
+        if (parsed && parsed.length > 20) {
           console.log(`Found transcript (no lang param): ${parsed.length} characters`);
           return parsed;
         }
@@ -105,7 +108,8 @@ function parseTranscript(xmlData) {
     while ((match = textRegex.exec(xmlData)) !== null) {
       const text = htmlDecode(match[1]);
       if (text.trim()) {
-        fullText += text + ' ';
+        // Preserve line breaks between captions
+        fullText += text.trim() + '\n';
         matchCount++;
       }
     }

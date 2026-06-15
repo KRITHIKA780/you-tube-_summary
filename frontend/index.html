@@ -48,6 +48,12 @@
             padding: 30px;
             margin-bottom: 30px;
         }
+        .card .card-actions {
+            display:flex;
+            gap:8px;
+            justify-content:flex-end;
+            margin-top:12px;
+        }
 
         .input-section {
             display: flex;
@@ -157,6 +163,14 @@
             display: none;
         }
 
+        .controls {
+            display:flex;
+            gap:8px;
+            align-items:center;
+            justify-content:flex-end;
+            margin-bottom:8px;
+        }
+
         .summary-box.active, .key-points-box.active, .transcript-box.active {
             display: block;
         }
@@ -212,11 +226,27 @@
 <body>
     <div class="container">
         <div class="header">
-            <h1>📺 YouTube Summarizer</h1>
-            <p>Extract transcripts, summarize content, and get key points instantly</p>
+            <h1>⚡ ClipWise — Instant YouTube Summaries</h1>
+            <p>Turn videos into crisp notes — key points, short summaries, and downloadable transcripts.</p>
+        </div>
+        <div style="text-align:right;margin-bottom:8px;">
+            <button id="logoutBtn" style="display:none;padding:6px 10px;border-radius:6px;border:none;background:#ff6b6b;color:#fff;">Logout</button>
         </div>
 
-        <div class="card">
+        <div class="card" id="loginCard">
+            <div style="margin-bottom:10px;font-weight:600;color:#333;">Welcome — please sign in</div>
+            <div style="display:flex;gap:8px;flex-direction:column;">
+                <input id="loginUser" placeholder="Username" style="padding:10px;border:1px solid #ddd;border-radius:6px;">
+                <input id="loginPass" type="password" placeholder="Password" style="padding:10px;border:1px solid #ddd;border-radius:6px;">
+                <div style="display:flex;gap:8px;justify-content:flex-end;">
+                    <button id="loginBtn" style="padding:10px 18px;background:#ff6b6b;color:#fff;border:none;border-radius:6px;">Sign in</button>
+                    <button id="createBtn" style="padding:10px 18px;background:#2dce89;color:#fff;border:none;border-radius:6px;">Create</button>
+                </div>
+                <div id="loginMsg" style="color:#c62828;margin-top:8px;display:none;"></div>
+            </div>
+        </div>
+
+        <div class="card" id="mainCard" style="display:none;">
             <div class="input-section">
                 <input 
                     type="text" 
@@ -243,17 +273,29 @@
         <div class="card" id="resultsCard" style="display: none;">
             <div class="section">
                 <div class="section-title">📄 Summary</div>
-                <div class="summary-box" id="summaryBox"></div>
+                    <div class="controls">
+                        <button id="copySummaryBtn" style="display:none;">Copy Summary</button>
+                        <button id="downloadSummaryBtn" style="display:none;">Download Summary</button>
+                    </div>
+                    <div class="summary-box" id="summaryBox"></div>
             </div>
 
             <div class="section">
                 <div class="section-title">⭐ Key Points</div>
-                <div class="key-points-box" id="keyPointsBox"></div>
+                    <div class="controls">
+                        <button id="copyKeyPointsBtn" style="display:none;">Copy Key Points</button>
+                        <button id="downloadKeyPointsBtn" style="display:none;">Download Key Points</button>
+                    </div>
+                    <div class="key-points-box" id="keyPointsBox"></div>
             </div>
 
             <div class="section">
                 <div class="section-title">📝 Full Transcript</div>
-                <div class="transcript-box" id="transcriptBox"></div>
+                    <div class="controls">
+                        <button id="toggleTranscriptBtn" style="display:none;">Show full transcript</button>
+                        <button id="downloadTranscriptBtn" style="display:none;">Download Transcript</button>
+                    </div>
+                    <div class="transcript-box" id="transcriptBox"></div>
             </div>
 
             <div style="margin-top: 20px; text-align: center;">
@@ -266,6 +308,77 @@
 
     <script>
         const API_URL = 'http://localhost:5000/api';
+        let _fullTranscript = '';
+
+        // Simple localStorage-based auth (one user). Not secure — for demo only.
+        function isAuthenticated() {
+            return !!localStorage.getItem('yt_user_logged_in');
+        }
+
+        function showAppForUser() {
+            document.getElementById('loginCard').style.display = 'none';
+            document.getElementById('mainCard').style.display = 'block';
+            document.querySelector('.header p').textContent = `Hello, ${localStorage.getItem('yt_user_name') || 'Creator'} — paste a URL below.`;
+        }
+
+        function showLogin() {
+            document.getElementById('loginCard').style.display = 'block';
+            document.getElementById('mainCard').style.display = 'none';
+        }
+
+        // Initialize auth UI
+        document.addEventListener('DOMContentLoaded', () => {
+            const loginBtn = document.getElementById('loginBtn');
+            const createBtn = document.getElementById('createBtn');
+            const loginMsg = document.getElementById('loginMsg');
+
+            if (isAuthenticated()) {
+                showAppForUser();
+            } else {
+                showLogin();
+            }
+
+            loginBtn.onclick = () => {
+                const u = document.getElementById('loginUser').value.trim();
+                const p = document.getElementById('loginPass').value;
+                const stored = JSON.parse(localStorage.getItem('yt_user') || 'null');
+                if (!u || !p) {
+                    loginMsg.textContent = 'Enter username and password';
+                    loginMsg.style.display = 'block';
+                    return;
+                }
+                if (!stored) {
+                    loginMsg.textContent = 'No account found — click Create to register';
+                    loginMsg.style.display = 'block';
+                    return;
+                }
+                if (stored.username === u && stored.password === p) {
+                    localStorage.setItem('yt_user_logged_in', '1');
+                    localStorage.setItem('yt_user_name', u);
+                    loginMsg.style.display = 'none';
+                    showAppForUser();
+                } else {
+                    loginMsg.textContent = 'Invalid credentials';
+                    loginMsg.style.display = 'block';
+                }
+            };
+
+            createBtn.onclick = () => {
+                const u = document.getElementById('loginUser').value.trim();
+                const p = document.getElementById('loginPass').value;
+                if (!u || !p) {
+                    loginMsg.textContent = 'Choose a username and password';
+                    loginMsg.style.display = 'block';
+                    return;
+                }
+                // Save single account for demo
+                localStorage.setItem('yt_user', JSON.stringify({ username: u, password: p }));
+                localStorage.setItem('yt_user_logged_in', '1');
+                localStorage.setItem('yt_user_name', u);
+                loginMsg.style.display = 'none';
+                showAppForUser();
+            };
+        });
 
         async function summarizeVideo() {
             const url = document.getElementById('urlInput').value.trim();
@@ -295,8 +408,9 @@
                 });
 
                 if (!response.ok) {
-                    const errorData = await response.json();
-                    throw new Error(errorData.error || 'Failed to summarize video');
+                    let errText = 'Failed to summarize video';
+                    try { const errorData = await response.json(); errText = errorData.error || errText; } catch(e){}
+                    throw new Error(`${response.status} - ${errText}`);
                 }
 
                 const data = await response.json();
@@ -312,25 +426,119 @@
         }
 
         function displayResults(data) {
-            document.getElementById('summaryBox').textContent = data.summary || 'No summary available';
-            document.getElementById('summaryBox').classList.add('active');
+            const summaryBox = document.getElementById('summaryBox');
+            summaryBox.textContent = data.summary || 'No summary available';
+            summaryBox.classList.add('active');
 
-            // Format key points
+            const keyPointsBox = document.getElementById('keyPointsBox');
             const keyPointsHTML = data.keyPoints
-                ? `<ol>${data.keyPoints.split('\n').filter(p => p.trim()).map(p => `<li>${p}</li>`).join('')}</ol>`
+                ? `<ol>${data.keyPoints.split('\n').filter(p => p.trim()).map(p => `<li>${escapeHtml(p)}</li>`).join('')}</ol>`
                 : '<p>No key points available</p>';
-            document.getElementById('keyPointsBox').innerHTML = keyPointsHTML;
-            document.getElementById('keyPointsBox').classList.add('active');
+            keyPointsBox.innerHTML = keyPointsHTML;
+            keyPointsBox.classList.add('active');
 
-            // Show first 500 chars of transcript
-            const transcriptPreview = data.transcript 
-                ? data.transcript.substring(0, 1000) + (data.transcript.length > 1000 ? '...' : '')
-                : 'No transcript available';
-            document.getElementById('transcriptBox').textContent = transcriptPreview;
-            document.getElementById('transcriptBox').classList.add('active');
+            // Full transcript handling with toggle
+            _fullTranscript = data.transcript || '';
+            const transcriptBox = document.getElementById('transcriptBox');
+            const toggleBtn = document.getElementById('toggleTranscriptBtn');
+            if (_fullTranscript) {
+                const preview = _fullTranscript.length > 800 ? _fullTranscript.substring(0, 800) + '...' : _fullTranscript;
+                transcriptBox.textContent = preview;
+                transcriptBox.classList.add('active');
+                toggleBtn.style.display = 'inline-block';
+                toggleBtn.textContent = _fullTranscript.length > 800 ? 'Show full transcript' : 'Show full transcript';
+                toggleBtn.onclick = () => {
+                    if (toggleBtn.dataset.open === '1') {
+                        // collapse
+                        transcriptBox.textContent = preview;
+                        toggleBtn.dataset.open = '0';
+                        toggleBtn.textContent = 'Show full transcript';
+                    } else {
+                        transcriptBox.textContent = _fullTranscript;
+                        toggleBtn.dataset.open = '1';
+                        toggleBtn.textContent = 'Hide full transcript';
+                    }
+                };
+            } else {
+                transcriptBox.textContent = 'No transcript available';
+                transcriptBox.classList.add('active');
+                toggleBtn.style.display = 'none';
+            }
+
+            // Wire copy buttons
+            const copySummaryBtn = document.getElementById('copySummaryBtn');
+            const copyKeyPointsBtn = document.getElementById('copyKeyPointsBtn');
+            if (data.summary) {
+                copySummaryBtn.style.display = 'inline-block';
+                copySummaryBtn.onclick = () => copyToClipboard(data.summary);
+            } else copySummaryBtn.style.display = 'none';
+
+            if (data.keyPoints) {
+                copyKeyPointsBtn.style.display = 'inline-block';
+                copyKeyPointsBtn.onclick = () => copyToClipboard(data.keyPoints);
+            } else copyKeyPointsBtn.style.display = 'none';
 
             document.getElementById('resultsCard').style.display = 'block';
         }
+
+        function copyToClipboard(text) {
+            navigator.clipboard.writeText(text).then(() => {
+                showSuccess('Copied to clipboard');
+            }).catch(() => {
+                showError('Unable to copy to clipboard');
+            });
+        }
+
+        function escapeHtml(unsafe) {
+            return unsafe
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Download helpers
+        function downloadText(filename, text) {
+            const blob = new Blob([text], { type: 'text/plain;charset=utf-8' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = filename;
+            document.body.appendChild(a);
+            a.click();
+            a.remove();
+            URL.revokeObjectURL(url);
+        }
+
+        // Wire logout and download UI after DOM loaded
+        document.addEventListener('DOMContentLoaded', () => {
+            const logoutBtn = document.getElementById('logoutBtn');
+            logoutBtn.onclick = () => {
+                localStorage.removeItem('yt_user_logged_in');
+                localStorage.removeItem('yt_user_name');
+                showLogin();
+                logoutBtn.style.display = 'none';
+            };
+
+            // Download buttons
+            document.getElementById('downloadSummaryBtn').onclick = () => {
+                const text = document.getElementById('summaryBox').textContent || '';
+                downloadText('summary.txt', text);
+            };
+            document.getElementById('downloadKeyPointsBtn').onclick = () => {
+                const items = Array.from(document.querySelectorAll('#keyPointsBox li')).map(li => li.textContent).join('\n');
+                downloadText('keypoints.txt', items);
+            };
+            document.getElementById('downloadTranscriptBtn').onclick = () => {
+                downloadText('transcript.txt', _fullTranscript || '');
+            };
+
+            // Show logout when logged in
+            if (isAuthenticated()) {
+                document.getElementById('logoutBtn').style.display = 'inline-block';
+            }
+        });
 
         function isValidYouTubeURL(url) {
             const patterns = [

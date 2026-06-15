@@ -32,15 +32,15 @@ export async function summarizeText(text) {
           messages: [
             {
               role: 'system',
-              content: 'Extract the 3-4 most important points from this text. Return ONLY bullet points, no paragraphs. Each point should be 1-2 sentences maximum.'
+              content: 'You are a concise summarizer. Return ONLY a numbered list (1. ...) of 5-7 concise bullet points that capture the core ideas. No paragraphs, no extra text, no preamble.'
             },
             {
               role: 'user',
-              content: `Extract key points from:\n\n${chunk}`
+              content: `Summarize the following transcript text into numbered bullet points (keep each point to 1-2 sentences):\n\n${chunk}`
             }
           ],
           max_tokens: 300,
-          temperature: 0.5,
+          temperature: 0.2,
         });
 
         if (response.choices && response.choices[0]) {
@@ -52,13 +52,45 @@ export async function summarizeText(text) {
       }
     }
 
-    // Combine and deduplicate points
+    // Combine, normalize to a numbered list and deduplicate
     const finalSummary = summaryPoints.join('\n');
-    return finalSummary || generateFallbackSummary(text);
+    const normalized = normalizeToNumberedList(finalSummary, 7);
+    return normalized || generateFallbackSummary(text);
   } catch (error) {
     console.error('Summarization error:', error);
     return generateFallbackSummary(text);
   }
+}
+
+function normalizeToNumberedList(rawText, maxItems = 7) {
+  if (!rawText) return null;
+  const lines = rawText.split(/\r?\n/)
+    .map(l => l.trim())
+    .filter(Boolean);
+
+  // Collect candidate lines that look like bullets or sentences
+  const candidates = [];
+  for (const line of lines) {
+    // Remove leading bullets like •, -, or numbering
+    const cleaned = line.replace(/^\s*(?:\d+\.|\*|•|\-|\s)+\s*/, '').trim();
+    if (cleaned.length > 10) candidates.push(cleaned);
+    if (candidates.length >= maxItems) break;
+  }
+
+  if (candidates.length === 0) return null;
+
+  // Deduplicate while preserving order
+  const seen = new Set();
+  const uniq = [];
+  for (const c of candidates) {
+    const key = c.toLowerCase();
+    if (!seen.has(key)) {
+      seen.add(key);
+      uniq.push(c);
+    }
+  }
+
+  return uniq.map((t, i) => `${i + 1}. ${t}`).join('\n');
 }
 
 export async function extractKeyPoints(text) {
@@ -115,17 +147,22 @@ function splitText(text, chunkSize) {
 
 function generateFallbackSummary(text) {
   // Extract important sentences without AI
-  const sentences = text.split(/[.!?]+/).filter(s => s.trim().length > 20);
-  
+  const sentences = text.split(/(?<=[.!?])\s+/).map(s => s.replace(/\s+/g, ' ').trim()).filter(s => s.length > 20);
+
   if (sentences.length === 0) return 'No summary available';
-  
-  // Take key sentences from different parts
-  const summary = [];
-  if (sentences.length > 0) summary.push('• ' + sentences[0].trim());
-  if (sentences.length > 1) summary.push('• ' + sentences[Math.floor(sentences.length / 2)].trim());
-  if (sentences.length > 2) summary.push('• ' + sentences[sentences.length - 1].trim());
-  
-  return summary.join('\n');
+
+  // Choose up to 5 representative sentences from start/middle/end
+  const picks = [];
+  picks.push(sentences[0]);
+  if (sentences.length > 2) picks.push(sentences[Math.floor(sentences.length / 3)]);
+  if (sentences.length > 3) picks.push(sentences[Math.floor(sentences.length / 2)]);
+  if (sentences.length > 4) picks.push(sentences[Math.floor((sentences.length * 2) / 3)]);
+  if (sentences.length > 1 && picks.length < 5) picks.push(sentences[sentences.length - 1]);
+
+  // Deduplicate and limit
+  const uniq = Array.from(new Set(picks)).slice(0, 5);
+
+  return uniq.map((s, i) => `${i + 1}. ${s.replace(/\s+\[.*?\]\s*/g, ' ').trim()}`).join('\n');
 }
 
 function generateFallbackKeyPoints(text) {
